@@ -84,12 +84,7 @@ export class SidebarComponent {
     
     // Obtener datos actuales para el reporte
     this.firestoreService.getRTDBMedicionesHistory(40, (mediciones) => {
-      const stations = [
-        { id: 'plaza_san_martin', name: 'Plaza San Martín' },
-        { id: 'av_colon_gral_paz', name: 'Av. Colón y Gral. Paz' },
-        { id: 'terminal_omnibus', name: 'Terminal de Ómnibus' },
-        { id: 'microestacion_01', name: 'Microestación 01' }
-      ];
+      const stations = this.firestoreService.stations;
 
       let htmlContent = `
         <h1 style="color: #0d9488; text-align: center;">REPORTE DE CALIDAD DEL AIRE - DEVECO FERIA</h1>
@@ -105,7 +100,7 @@ export class SidebarComponent {
         const latest = mediciones.find(m => m.estacion_id === s.id);
         htmlContent += `
           <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #ccc;">
-            <h3 style="color: #2563eb;">${s.name}</h3>
+            <h3 style="color: #2563eb;">${s.nombre}</h3>
             ${latest ? `
               <ul>
                 <li><b>Estado General:</b> ${latest.estado_calidad_aire}</li>

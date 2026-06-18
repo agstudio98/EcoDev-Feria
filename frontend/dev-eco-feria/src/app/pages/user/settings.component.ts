@@ -14,7 +14,7 @@ import { FooterComponent } from '../../layout/footer.component';
   template: `
     <app-navbar></app-navbar>
     <main class="settings-container animate-fade-in">
-      <!-- Diálogo de Mensaje Custom (Movido fuera del grid para evitar desorganización) -->
+      <!-- Diálogo de Mensaje Custom -->
       <div *ngIf="messageService.message() as msg" class="custom-dialog" [class]="msg.type">
         <div class="dialog-content">
           <strong>{{msg.title}}</strong>
@@ -39,7 +39,11 @@ import { FooterComponent } from '../../layout/footer.component';
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="nav-icon-sm"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
               Notificaciones
             </a>
-            <button (click)="logout()" class="logout-btn">Cerrar Sesión</button>
+            <button (click)="logout()" class="logout-btn desktop-only">Cerrar Sesión</button>
+            <button (click)="logout()" class="logout-btn-mobile mobile-only-flex">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="nav-icon-sm"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              Salir
+            </button>
           </nav>
         </aside>
 
@@ -82,16 +86,16 @@ import { FooterComponent } from '../../layout/footer.component';
                 <div class="security-card-stack">
                   <div class="form-group">
                     <label>Nueva Contraseña</label>
-                    <input type="password" [(ngModel)]="newPassword" name="newPassword" placeholder="••••••••">
+                    <input type="password" [(ngModel)]="newPasswordString" name="newPassword" placeholder="••••••••">
                   </div>
                   
                   <div class="form-group">
                     <label>Repetir Nueva Contraseña</label>
-                    <input type="password" [(ngModel)]="repeatPassword" name="repeatPassword" placeholder="••••••••">
+                    <input type="password" [(ngModel)]="repeatPasswordString" name="repeatPassword" placeholder="••••••••">
                   </div>
 
                   <div class="form-actions" style="margin-top: 1rem;">
-                    <button (click)="handleUpdatePassword()" class="save-btn" [disabled]="saving() || !newPassword() || newPassword() !== repeatPassword()">
+                    <button (click)="handleUpdatePassword()" class="save-btn" [disabled]="saving() || !newPasswordString || newPasswordString !== repeatPasswordString">
                       Actualizar Contraseña
                     </button>
                   </div>
@@ -114,8 +118,8 @@ import { FooterComponent } from '../../layout/footer.component';
             <!-- Notificaciones -->
             <div *ngSwitchCase="'notifications'">
               <header class="content-header">
-                <h2>Preferencias de Notificación</h2>
-                <p>Configura las alertas en tiempo real de la plataforma.</p>
+                <h2>Preferencias del Sistema</h2>
+                <p>Configura las alertas y el asistente de ayuda de la plataforma.</p>
               </header>
 
               <div class="settings-form">
@@ -141,6 +145,17 @@ import { FooterComponent } from '../../layout/footer.component';
                       <span class="slider"></span>
                     </label>
                   </div>
+
+                  <div class="notif-item">
+                    <div class="notif-info">
+                      <h4>Asistente de Guía</h4>
+                      <p>Mostrar el botón de ayuda y los tutoriales interactivos en cada sección.</p>
+                    </div>
+                    <label class="switch">
+                      <input type="checkbox" [(ngModel)]="localPreferences.guideEnabled" name="guideEnabled">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
                 </div>
 
                 <div class="form-actions">
@@ -157,78 +172,317 @@ import { FooterComponent } from '../../layout/footer.component';
     <app-footer></app-footer>
   `,
   styles: [`
-    .save-btn {
-      padding: 0.8rem 2rem;
-      background: var(--color-accent);
-      color: var(--color-base);
-      border: none;
-      border-radius: 6px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: var(--transition-smooth);
+    .settings-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: clamp(1rem, 5vw, 3rem);
+      min-height: calc(100vh - 160px);
     }
-    .save-btn:hover:not(:disabled) {
-      background: #4cd3b0;
-      transform: translateY(-2px);
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 3rem;
+      align-items: start;
     }
-    .secondary-btn {
-      padding: 0.8rem 1.5rem;
-      background: rgba(100, 255, 218, 0.1);
-      color: var(--color-accent);
-      border: 1px solid var(--color-accent);
-      border-radius: 6px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: var(--transition-smooth);
-    }
-    .secondary-btn:hover:not(:disabled) {
-      background: var(--color-accent);
-      color: var(--color-base);
-    }
-    .security-card {
-      background: rgba(255, 255, 255, 0.03);
-      padding: 1.5rem;
-      border-radius: 8px;
-      border: 1px solid var(--color-border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-    }
-    .security-info h4 { margin: 0 0 0.5rem 0; color: var(--color-text); }
-    .security-info p { margin: 0; font-size: 0.85rem; color: var(--color-text-muted); }
-    
-    @media (max-width: 768px) {
-      .security-card { flex-direction: column; text-align: center; }
-    }
-    .security-card-stack {
-      background: rgba(255, 255, 255, 0.03);
-      padding: 1.5rem;
-      border-radius: 12px;
-      border: 1px solid var(--color-border);
+
+    .settings-sidebar {
+      position: sticky;
+      top: 100px;
       display: flex;
       flex-direction: column;
       gap: 1.5rem;
     }
+
+    .settings-sidebar h3 {
+      font-size: 1.5rem;
+      color: var(--color-text);
+      margin: 0;
+      font-family: var(--font-heading);
+    }
+
+    .settings-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .settings-nav a {
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      transition: var(--transition-smooth);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      font-weight: 500;
+    }
+
+    .settings-nav a:hover {
+      background: rgba(100, 255, 218, 0.05);
+      color: var(--color-accent);
+      transform: translateX(5px);
+    }
+
+    .settings-nav a.active {
+      background: rgba(100, 255, 218, 0.1);
+      color: var(--color-accent);
+      border-color: var(--color-accent);
+      font-weight: 700;
+    }
+
+    .logout-btn {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: rgba(255, 77, 77, 0.05);
+      color: #ff4d4d;
+      border: 1px solid rgba(255, 77, 77, 0.2);
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      font-family: var(--font-heading);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: var(--transition-smooth);
+    }
+
+    .logout-btn:hover {
+      background: rgba(255, 77, 77, 0.1);
+      border-color: #ff4d4d;
+    }
+
+    .logout-btn-mobile {
+      display: none;
+      padding: 0.8rem 1.25rem;
+      background: rgba(255, 77, 77, 0.1);
+      color: #ff4d4d;
+      border: 1px solid rgba(255, 77, 77, 0.3);
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--font-heading);
+      text-transform: uppercase;
+      font-size: 0.8rem;
+    }
+
+    .mobile-only-flex { display: none; }
+    .desktop-only { display: block; }
+
+    .settings-content {
+      background: var(--color-panel-bg);
+      border: 1px solid var(--color-border);
+      padding: clamp(1.5rem, 5vw, 3rem);
+      border-radius: 20px;
+      backdrop-filter: blur(20px);
+    }
+
+    .content-header {
+      margin-bottom: 2.5rem;
+    }
+
+    .content-header h2 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: var(--color-accent);
+    }
+
+    .settings-form {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .form-group label {
+      font-size: 0.85rem;
+      color: var(--color-text);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .form-group input {
+      background: var(--color-input-bg);
+      border: 1px solid var(--color-border);
+      padding: 1rem;
+      border-radius: 8px;
+      color: var(--color-text);
+      outline: none;
+      transition: var(--transition-smooth);
+    }
+
+    .form-group input:focus {
+      border-color: var(--color-accent);
+      background: var(--color-input-focus);
+    }
+
+    .save-btn {
+      padding: 1rem 2.5rem;
+      background: var(--color-accent);
+      color: var(--color-base);
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: var(--font-heading);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      transition: var(--transition-smooth);
+    }
+
+    .save-btn:hover:not(:disabled) {
+      background: #4cd3b0;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(100, 255, 218, 0.2);
+    }
+
+    .secondary-btn {
+      padding: 1rem 2rem;
+      background: transparent;
+      color: var(--color-accent);
+      border: 1px solid var(--color-accent);
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+    }
+
+    .notification-options {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .notif-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.5rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      border: 1px solid var(--color-border);
+      gap: 1.5rem;
+    }
+
+    .notif-info h4 { margin: 0 0 0.25rem 0; color: var(--color-text); }
+    .notif-info p { margin: 0; font-size: 0.9rem; color: var(--color-text-muted); }
+
+    .security-card-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 2rem;
+      border-radius: 12px;
+      border: 1px solid var(--color-border);
+    }
+
     .security-divider {
       text-align: center;
       color: var(--color-text-muted);
       font-size: 0.8rem;
       text-transform: uppercase;
       letter-spacing: 2px;
-      margin: 1rem 0;
-      position: relative;
+      margin: 1.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
     }
     .security-divider::before, .security-divider::after {
       content: '';
-      position: absolute;
-      top: 50%;
-      width: 30%;
+      flex: 1;
       height: 1px;
       background: var(--color-border);
     }
-    .security-divider::before { left: 0; }
-    .security-divider::after { right: 0; }
+
+    .security-card {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 1.5rem;
+      border-radius: 12px;
+      border: 1px solid var(--color-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    /* Media Queries */
+    @media (max-width: 1024px) {
+      .settings-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+
+      .settings-sidebar {
+        position: relative;
+        top: 0;
+      }
+
+      .settings-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+        scrollbar-width: none;
+      }
+
+      .settings-nav::-webkit-scrollbar {
+        display: none;
+      }
+
+      .settings-nav a {
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      .desktop-only {
+        display: none !important;
+      }
+
+      .mobile-only-flex {
+        display: flex !important;
+        flex-shrink: 0;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .notif-item {
+        flex-direction: row;
+        text-align: left;
+      }
+
+      .security-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 1.5rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .settings-container {
+        padding: 1rem;
+      }
+
+      .settings-content {
+        padding: 1.5rem;
+      }
+
+      .notif-item {
+        padding: 1.25rem;
+      }
+      
+      .notif-info h4 { font-size: 0.95rem; }
+      .notif-info p { font-size: 0.8rem; }
+    }
   `]
 })
 export class UserSettingsComponent {
@@ -244,9 +498,12 @@ export class UserSettingsComponent {
     dataDetection: true,
     actuatorAlerts: true
   };
+  localPreferences: any = {
+    guideEnabled: true
+  };
 
-  newPassword = signal('');
-  repeatPassword = signal('');
+  newPasswordString = '';
+  repeatPasswordString = '';
   saving = signal(false);
 
   constructor() {
@@ -256,10 +513,14 @@ export class UserSettingsComponent {
       if (data) {
         this.localUserData = { ...data };
         if (data.notifications) {
-          // Asegurar que mapeamos los nuevos nombres de campos
           this.localNotificationData = {
             dataDetection: data.notifications.dataDetection !== undefined ? data.notifications.dataDetection : true,
             actuatorAlerts: data.notifications.actuatorAlerts !== undefined ? data.notifications.actuatorAlerts : true
+          };
+        }
+        if (data.preferences) {
+          this.localPreferences = {
+            guideEnabled: data.preferences.guideEnabled !== undefined ? data.preferences.guideEnabled : true
           };
         }
       }
@@ -299,21 +560,21 @@ export class UserSettingsComponent {
   }
 
   async handleUpdatePassword() {
-    if (this.newPassword() !== this.repeatPassword()) {
+    if (this.newPasswordString !== this.repeatPasswordString) {
       this.messageService.showMessage('Error', 'Las contraseñas no coinciden.', 'error');
       return;
     }
 
     this.saving.set(true);
     try {
-      await this.authService.updatePassword(this.newPassword());
-      this.messageService.showMessage('Éxito', 'Contraseña actualizada correctamente y registrada en el sistema.', 'success');
-      this.newPassword.set('');
-      this.repeatPassword.set('');
+      await this.authService.updatePassword(this.newPasswordString);
+      this.messageService.showMessage('Éxito', 'Contraseña actualizada correctamente.', 'success');
+      this.newPasswordString = '';
+      this.repeatPasswordString = '';
     } catch (error: any) {
       console.error(error);
       if (error.code === 'auth/requires-recent-login') {
-        this.messageService.showMessage('Seguridad', 'Para cambiar tu contraseña debes haber iniciado sesión recientemente. Por favor, vuelve a entrar.', 'info');
+        this.messageService.showMessage('Seguridad', 'Para cambiar tu contraseña debes haber iniciado sesión recientemente.', 'info');
       } else {
         this.messageService.showMessage('Error', 'No se pudo actualizar la contraseña.', 'error');
       }
@@ -326,9 +587,10 @@ export class UserSettingsComponent {
     this.saving.set(true);
     try {
       await this.authService.updateUserData({
-        notifications: this.localNotificationData
+        notifications: this.localNotificationData,
+        preferences: this.localPreferences
       });
-      this.messageService.showMessage('Éxito', 'Preferencias de notificación guardadas en Firebase.', 'success');
+      this.messageService.showMessage('Éxito', 'Preferencias guardadas correctamente.', 'success');
     } catch (error) {
       this.messageService.showMessage('Error', 'No se pudieron guardar las preferencias.', 'error');
     } finally {

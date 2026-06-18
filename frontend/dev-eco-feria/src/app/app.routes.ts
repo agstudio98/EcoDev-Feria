@@ -7,11 +7,13 @@ import { HistoryReportComponent } from './pages/dashboard/history-report.compone
 import { HeatmapComponent } from './pages/dashboard/heatmap.component';
 import { LoginComponent } from './pages/auth/login.component';
 import { UserSettingsComponent } from './pages/user/settings.component';
+import { HistoryComponent } from './pages/history/history.component';
 import { authGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
   { path: '', component: HomeComponent },
   { path: 'equipo', component: AboutComponent },
+  { path: 'historia', component: HistoryComponent },
   { path: 'auth/login', component: LoginComponent },
   { 
     path: 'dashboard', 

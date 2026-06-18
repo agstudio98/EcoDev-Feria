@@ -30,6 +30,7 @@ import { ConnectivityService } from '../services/connectivity.service';
         <ul class="nav-links" [class.mobile-open]="isMenuOpen">
           <li><a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" (click)="closeMenu()">Inicio</a></li>
           <li><a routerLink="/equipo" routerLinkActive="active" (click)="closeMenu()">Quiénes Somos</a></li>
+          <li><a routerLink="/historia" routerLinkActive="active" (click)="closeMenu()">Historia</a></li>
           <li class="mobile-only">
             <div class="nav-cta">
               <div class="connectivity-wrapper">

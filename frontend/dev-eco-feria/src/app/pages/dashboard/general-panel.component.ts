@@ -66,7 +66,7 @@ interface MetricDisplayConfig {
                [class.active]="selectedStationId() === s.id"
                (click)="selectStation(s.id)">
             <span class="chip-dot"></span>
-            {{ s.name }}
+            {{ s.nombre }}
           </div>
         </div>
 
@@ -104,6 +104,60 @@ interface MetricDisplayConfig {
         </div>
       }
 
+      <!-- Resumen de todas las Estaciones -->
+      @if (latestByStation().length > 1) {
+        <div class="summary-grid-container">
+          <div class="all-stations-summary animate-fade-in" style="animation-delay: 0.2s">
+            <div class="card-header">
+              <h3>Estado Actual por Estación</h3>
+              <span class="badge">{{ latestByStation().length }} activas</span>
+            </div>
+            <div class="summary-table-wrapper">
+              <table class="summary-table">
+                <thead>
+                  <tr>
+                    <th>Estación</th>
+                    <th>Última Lectura</th>
+                    <th>CO2</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let s of latestByStation()" 
+                      [class.active-row]="s.estacion_id === selectedStationId()"
+                      (click)="selectStation(s.estacion_id)">
+                    <td><strong>{{ getStationName(s.estacion_id) }}</strong></td>
+                    <td>{{ formatTime(s.fecha_hora) }}</td>
+                    <td>{{ s.co2 ?? '---' }} <small>ppm</small></td>
+                    <td>
+                      <span class="status-dot" [class]="getAirQualityClass(s.estado_calidad_aire)"></span>
+                      {{ s.estado_calidad_aire }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="recent-activity-card animate-fade-in" style="animation-delay: 0.3s">
+            <div class="card-header">
+              <h3>Actividad Reciente</h3>
+              <span class="badge">Últimos 10</span>
+            </div>
+            <div class="activity-list">
+              <div *ngFor="let m of recentActivity()" class="activity-item">
+                <div class="activity-time">{{ formatTime(m.fecha_hora) }}</div>
+                <div class="activity-desc">
+                  <strong>{{ getStationName(m.estacion_id) }}</strong>: 
+                  {{ m.co2 ?? '---' }} ppm | {{ m.temperatura ?? '---' }}°C
+                </div>
+                <div class="status-dot mini" [class]="getAirQualityClass(m.estado_calidad_aire)"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- Métricas Dinámicas -->
       <div class="metrics-grid">
         <div *ngFor="let config of metricConfigs; let i = index" 
@@ -125,7 +179,7 @@ interface MetricDisplayConfig {
             <div class="metric-detail-overlay">
               <span>Nivel detectado en tiempo real</span>
               <div class="progress-bar">
-                <div class="progress-fill" [style.width.%]="getHumoPercentage(latestMedicion()!.humo)"></div>
+                <div class="progress-fill" [style.width.%]="getHumoPercentage(latestMedicion()!.humo || 0)"></div>
               </div>
             </div>
           }
@@ -293,7 +347,110 @@ interface MetricDisplayConfig {
     .summary-label strong { color: var(--color-accent); }
     .summary-content h3 { font-size: 1.5rem; margin: 0.25rem 0 0; }
 
+    /* Layout para el resumen y actividad */
+    .summary-grid-container {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+
+    .all-stations-summary, .recent-activity-card {
+      background: var(--color-panel-bg);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+    }
+    .all-stations-summary .card-header, .recent-activity-card .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Estilos Actividad Reciente */
+    .activity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 250px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+    .activity-list::-webkit-scrollbar { width: 4px; }
+    .activity-list::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+    
+    .activity-item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+    .activity-item:hover { border-color: var(--color-accent); background: rgba(100, 255, 218, 0.02); }
+    .activity-time { color: var(--color-accent); font-family: monospace; font-weight: 600; font-size: 0.75rem; }
+    .activity-desc { color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .status-dot.mini { width: 6px; height: 6px; margin-right: 0; }
+
+    .badge {
+      background: rgba(100, 255, 218, 0.1);
+      color: var(--color-accent);
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .summary-table-wrapper { overflow-x: auto; }
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .summary-table th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      color: var(--color-text-muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .summary-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--color-border);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .summary-table tr:hover td { background: rgba(100, 255, 218, 0.03); }
+    .summary-table tr.active-row td { 
+      background: rgba(100, 255, 218, 0.05);
+      border-left: 2px solid var(--color-accent);
+    }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 0.5rem;
+    }
+    .status-dot.positive { background: #28a745; box-shadow: 0 0 8px #28a745; }
+    .status-dot.neutral { background: #ffc107; box-shadow: 0 0 8px #ffc107; }
+    .status-dot.error { background: #dc3545; box-shadow: 0 0 8px #dc3545; }
+
     .metric-value small { font-size: 0.9rem; opacity: 0.6; margin-left: 4px; }
+
+    @media (max-width: 1024px) {
+      .summary-grid-container { grid-template-columns: 1fr; }
+    }
     
     .chart-container {
       position: relative;
@@ -347,16 +504,14 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
   /** Estado reactivo (Signals) */
   /** La medición más reciente de la estación seleccionada */
   latestMedicion = signal<Medicion | null>(null);
+  /** Últimas mediciones de cada estación para el resumen global */
+  latestByStation = signal<Medicion[]>([]);
+  /** Lista de las últimas mediciones globales (actividad reciente) */
+  recentActivity = signal<Medicion[]>([]);
   /** Listado de mediciones históricas filtradas para gráficos */
   historicalMediciones = signal<Medicion[]>([]);
-  /** Acumulador de todas las mediciones de todas las fuentes */
-  allMediciones = signal<Medicion[]>([]);
-  /** ID de la estación que se está visualizando actualmente */
-  selectedStationId = signal<string>('plaza_san_martin');
-  
-  /** Gestión de suscripciones para evitar fugas de memoria */
-  private unsubscribe: any;
-  private unsubFirestore: any;
+  /** ID de la estación que se está visualizando actualmente (persiste vía servicio) */
+  selectedStationId = this.firestoreService.selectedStationId;
 
   /** Instancias de Chart.js */
   gasesChart: any = null;
@@ -381,13 +536,7 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Listado de estaciones disponibles para monitoreo */
-  stations = [
-    { id: 'plaza_san_martin', name: 'Plaza San Martín' },
-    { id: 'av_colon_gral_paz', name: 'Av. Colón y Gral. Paz' },
-    { id: 'terminal_omnibus', name: 'Terminal de Ómnibus' },
-    { id: 'microestacion_01', name: 'Microestación 01' },
-    { id: 'Rio Cuarto', name: 'Central de Río Cuarto' }
-  ];
+  stations = this.firestoreService.stations;
 
   /** Configuración de las métricas que se muestran en tarjetas */
   metricConfigs: MetricDisplayConfig[] = [
@@ -429,17 +578,38 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
     });
 
     /**
-     * Efecto: Filtra y procesa los datos globales basándose en la estación seleccionada.
+     * Efecto: Filtra y procesa los datos globales de FirestoreService basándose en la estación seleccionada.
      */
     effect(() => {
-      const all = this.allMediciones();
+      const all = this.firestoreService.medicionesGeneral();
       const stationId = this.selectedStationId();
       
+      console.log(`GeneralPanel: Procesando ${all.length} registros (Orden: Último Primero)`);
+      
+      // 1. Obtener la última medición de CADA estación (Resumen Global)
+      // Como el orden es DESCENDENTE, el primer elemento de cada grupo es el más reciente.
+      const latests: Medicion[] = [];
+      const stationsInData = [...new Set(all.map(m => m.estacion_id))];
+      
+      stationsInData.forEach(sId => {
+        const stationMeds = all.filter(m => m.estacion_id === sId);
+        if (stationMeds.length > 0) {
+          latests.push(stationMeds[0]); // El PRIMERO es el más reciente
+        }
+      });
+      // El resumen ya está ordenado por el servicio (descendente general),
+      // pero aquí nos aseguramos de que las estaciones se vean por su último reporte.
+      this.latestByStation.set(latests);
+
+      // 2. Actividad Reciente (Primeros 10 de la lista, que son los más nuevos)
+      this.recentActivity.set(all.slice(0, 10));
+
+      // 3. Filtrar para la estación seleccionada (Gráficos y Métricas)
       const filtered = all.filter(m => m.estacion_id === stationId);
       
       if (filtered.length > 0) {
-        this.latestMedicion.set(filtered[0]);
-        // Se invierte para que el gráfico fluya de izquierda a derecha (más antiguos a más nuevos)
+        this.latestMedicion.set(filtered[0]); // El PRIMERO es el más reciente
+        // El histórico para el gráfico DEBE ser Ascendente (Pasado a Presente)
         this.historicalMediciones.set([...filtered].reverse());
       } else {
         this.latestMedicion.set(null);
@@ -449,7 +619,8 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.listenToMediciones();
+    // Ya no es necesario llamar a listenToMediciones localmente,
+    // el servicio ya lo hace de forma global.
   }
 
   /**
@@ -470,13 +641,6 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    // Limpieza de suscripciones
-    if (this.unsubscribe) {
-      if (typeof this.unsubscribe === 'function') this.unsubscribe();
-      else if (this.unsubscribe.unsubscribe) this.unsubscribe.unsubscribe();
-    }
-    if (this.unsubFirestore) this.unsubFirestore();
-    
     // Destrucción de gráficos para liberar memoria
     if (this.gasesChart) this.gasesChart.destroy();
     if (this.envChart) this.envChart.destroy();
@@ -490,33 +654,6 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Conecta con múltiples fuentes de datos de Firebase y unifica el flujo de entrada.
-   */
-  listenToMediciones() {
-    const allDataMap = new Map<string, Medicion[]>();
-
-    const updateAllMediciones = () => {
-      const merged: Medicion[] = [];
-      allDataMap.forEach(meds => merged.push(...meds));
-      // Orden cronológico descendente global
-      merged.sort((a, b) => new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime());
-      this.allMediciones.set(merged);
-    };
-
-    // Fuente 1: Tiempo real (RTDB)
-    this.unsubscribe = this.firestoreService.getRTDBMediciones((mediciones) => {
-      allDataMap.set('rtdb', mediciones);
-      updateAllMediciones();
-    });
-
-    // Fuente 2: Persistencia (Firestore)
-    this.unsubFirestore = this.firestoreService.getFirestoreMediciones((mediciones) => {
-      allDataMap.set('firestore', mediciones);
-      updateAllMediciones();
-    });
-  }
-
-  /**
    * Cambia la estación activa para visualizar sus datos específicos.
    */
   selectStation(id: string) {
@@ -527,7 +664,7 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
    * Obtiene el nombre amigable de una estación por su ID.
    */
   getStationName(id: string): string {
-    return this.stations.find(s => s.id === id)?.name || id;
+    return this.stations.find(s => s.id === id)?.nombre || id;
   }
 
   /** Navegación secuencial de estaciones */

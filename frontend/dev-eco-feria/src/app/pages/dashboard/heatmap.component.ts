@@ -1,11 +1,11 @@
-import { Component, inject, OnInit, signal, OnDestroy, AfterViewInit, ElementRef, ViewChild, PLATFORM_ID } from '@angular/core';
+import { Component, inject, OnInit, signal, OnDestroy, AfterViewInit, ElementRef, ViewChild, PLATFORM_ID, effect } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { Firestore, collection, onSnapshot, query, orderBy, limit, getDocs, where } from '@angular/fire/firestore';
-import { Estacion, Medicion, FirestoreService } from '../../services/firestore.service';
+import { FirestoreService, Medicion, Estacion } from '../../services/firestore.service';
 
 declare var google: any;
 
 interface EstacionConEstado extends Estacion {
+  id: string; // Hacemos el ID obligatorio para este componente
   ultimaMedicion?: Medicion;
   calidadColor?: string;
 }
@@ -266,7 +266,6 @@ interface EstacionConEstado extends Estacion {
 export class HeatmapComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('mapContainer') mapElement!: ElementRef;
   
-  private firestore = inject(Firestore);
   private firestoreService = inject(FirestoreService);
   private platformId = inject(PLATFORM_ID);
   
@@ -280,35 +279,94 @@ export class HeatmapComponent implements OnInit, OnDestroy, AfterViewInit {
   private infoWindows: any[] = [];
   private userMarker: any;
   private heatmapLayer: any;
-  private unsubscribers: any[] = [];
-  private mapCheckInterval: any;
   private isDestroyed = false;
 
+  constructor() {
+    /**
+     * Efecto: Reacciona a cambios en las mediciones globales.
+     * Procesa los datos y actualiza las estaciones.
+     */
+    effect(() => {
+      const allMeds = this.firestoreService.medicionesGeneral();
+      if (allMeds.length > 0) {
+        this.lastUpdate = new Date();
+        this.procesarMediciones(allMeds);
+      }
+    });
+  }
+
   ngOnInit() {
-    this.cargarEstacionesYMediciones();
+    this.inicializarEstacionesBase();
   }
 
   ngAfterViewInit() {
     if (isPlatformBrowser(this.platformId)) {
-      // Pequeño delay para asegurar que el DOM está completamente estable
       setTimeout(() => this.initMap(), 100);
     }
   }
 
   ngOnDestroy() {
     this.isDestroyed = true;
-    if (this.mapCheckInterval) {
-      clearInterval(this.mapCheckInterval);
-    }
-    this.unsubscribers.forEach(unsub => {
-      if (typeof unsub === 'function') unsub();
-      else if (unsub && (unsub as any).unsubscribe) (unsub as any).unsubscribe();
-    });
-    // Limpiar marcadores y círculos para liberar memoria
+    // Limpiar marcadores y círculos
     this.markers.forEach(m => m.setMap(null));
     this.markers.clear();
     this.circles.forEach(c => c.setMap(null));
     this.circles.clear();
+  }
+
+  private inicializarEstacionesBase() {
+    this.estacionesConDatos.set(this.firestoreService.stations.map(s => ({
+      ...s,
+      ultimaMedicion: undefined,
+      calidadColor: undefined
+    })));
+  }
+
+  private procesarMediciones(mediciones: Medicion[]) {
+    const current = [...this.estacionesConDatos()];
+    const lastMedsMap = new Map<string, Medicion>();
+
+    // Obtener la última medición de cada estación
+    mediciones.forEach(m => {
+      if (!lastMedsMap.has(m.estacion_id)) {
+        lastMedsMap.set(m.estacion_id, m);
+      }
+    });
+
+    let huboCambios = false;
+
+    lastMedsMap.forEach((medicion, id) => {
+      const index = current.findIndex(e => e.id === id);
+      if (index !== -1) {
+        if (current[index].ultimaMedicion?.fecha_hora !== medicion.fecha_hora) {
+          current[index] = {
+            ...current[index],
+            ultimaMedicion: medicion,
+            calidadColor: this.getColorByCO2(medicion.co2)
+          };
+          huboCambios = true;
+        }
+      } else {
+        // Nueva estación dinámica
+        current.push({
+          id,
+          nombre: `Estación ${id}`,
+          lat: medicion.lat || (-31.416 + (Math.random() - 0.5) * 0.01),
+          lng: medicion.lng || (-64.183 + (Math.random() - 0.5) * 0.01),
+          ultimaMedicion: medicion,
+          calidadColor: this.getColorByCO2(medicion.co2)
+        });
+        huboCambios = true;
+      }
+    });
+
+    if (huboCambios) {
+      this.estacionesConDatos.set(current);
+      if (this.isMapLoaded()) {
+        this.updateMapMarkers();
+        this.updateHeatmap();
+      }
+    }
   }
 
   initMap() {
@@ -316,7 +374,6 @@ export class HeatmapComponent implements OnInit, OnDestroy, AfterViewInit {
     
     console.log("Esperando API de Google Maps...");
     
-    // El script ya está en index.html, solo esperamos a que esté disponible
     const checkGoogle = setInterval(() => {
       if (this.isDestroyed) {
         clearInterval(checkGoogle);
@@ -329,7 +386,6 @@ export class HeatmapComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }, 500);
 
-    // Timeout de seguridad
     setTimeout(() => {
       if (!this.isMapLoaded() && !this.isDestroyed) {
         console.error("Error: Google Maps no se cargó. Verificá la conexión o la API Key.");
@@ -348,7 +404,7 @@ export class HeatmapComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     try {
-      if (this.map) return; // Evitar doble renderizado
+      if (this.map) return;
 
       const cordobaCenter = { lat: -31.416, lng: -64.183 };
       const mapOptions = {
@@ -370,88 +426,6 @@ export class HeatmapComponent implements OnInit, OnDestroy, AfterViewInit {
     } catch (error) {
       console.error("Error al renderizar el mapa:", error);
     }
-  }
-
-  async cargarEstacionesYMediciones() {
-    // Estaciones base con coordenadas conocidas
-    const estacionesBase: Record<string, Partial<EstacionConEstado>> = {
-      'av_colon_gral_paz': { nombre: 'Av. Colón y Gral. Paz', lat: -31.4131, lng: -64.1862 },
-      'plaza_san_martin': { nombre: 'Plaza San Martín', lat: -31.4168, lng: -64.1835 },
-      'terminal_omnibus': { nombre: 'Terminal de Ómnibus', lat: -31.4246, lng: -64.1731 },
-      'microestacion_01': { nombre: 'Microestación 01', lat: -31.4201, lng: -64.1885 },
-      'Rio Cuarto': { nombre: 'Central de Río Cuarto', lat: -33.1232, lng: -64.3493 }
-    };
-
-    // Inicializamos el signal con las bases
-    this.estacionesConDatos.set(Object.entries(estacionesBase).map(([id, data]) => ({
-      id,
-      nombre: data.nombre || id,
-      lat: data.lat,
-      lng: data.lng
-    })));
-
-    const allLastMeds = new Map<string, Medicion>();
-
-    const updateEstaciones = () => {
-      const current = [...this.estacionesConDatos()];
-      let huboCambios = false;
-
-      allLastMeds.forEach((medicion, id) => {
-        const index = current.findIndex(e => e.id === id);
-        if (index !== -1) {
-          current[index] = {
-            ...current[index],
-            ultimaMedicion: medicion,
-            calidadColor: this.getColorByCO2(medicion.co2)
-          };
-          huboCambios = true;
-        } else {
-          // Nueva estación dinámica
-          current.push({
-            id,
-            nombre: `Estación ${id}`,
-            lat: -31.416 + (Math.random() - 0.5) * 0.01,
-            lng: -64.183 + (Math.random() - 0.5) * 0.01,
-            ultimaMedicion: medicion,
-            calidadColor: this.getColorByCO2(medicion.co2)
-          });
-          huboCambios = true;
-        }
-      });
-
-      if (huboCambios) {
-        this.estacionesConDatos.set(current);
-        this.updateMapMarkers();
-        this.updateHeatmap();
-      }
-    };
-
-    // Fuente 1: RTDB
-    const unsubRTDB = this.firestoreService.getRTDBMediciones((mediciones) => {
-      if (mediciones.length > 0) {
-        this.lastUpdate = new Date();
-        mediciones.forEach(m => {
-          if (!allLastMeds.has(m.estacion_id)) allLastMeds.set(m.estacion_id, m);
-        });
-        updateEstaciones();
-      }
-    });
-    this.unsubscribers.push(unsubRTDB);
-
-    // Fuente 2: Firestore
-    const unsubFirestore = this.firestoreService.getFirestoreMediciones((mediciones) => {
-      if (mediciones.length > 0) {
-        this.lastUpdate = new Date();
-        mediciones.forEach(m => {
-          // Firestore ya viene ordenado por fecha, el primero es el más reciente
-          if (!allLastMeds.has(m.estacion_id) || m.estacion_id === 'central_rio_cuarto') {
-            allLastMeds.set(m.estacion_id, m);
-          }
-        });
-        updateEstaciones();
-      }
-    });
-    this.unsubscribers.push(unsubFirestore);
   }
 
   updateMapMarkers() {
