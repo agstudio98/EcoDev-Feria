@@ -117,7 +117,6 @@ interface MetricDisplayConfig {
                 <thead>
                   <tr>
                     <th>Estación</th>
-                    <th>Última Lectura</th>
                     <th>CO2</th>
                     <th>Estado</th>
                   </tr>
@@ -127,7 +126,6 @@ interface MetricDisplayConfig {
                       [class.active-row]="s.estacion_id === selectedStationId()"
                       (click)="selectStation(s.estacion_id)">
                     <td><strong>{{ getStationName(s.estacion_id) }}</strong></td>
-                    <td>{{ formatTime(s.fecha_hora) }}</td>
                     <td>{{ s.co2 ?? '---' }} <small>ppm</small></td>
                     <td>
                       <span class="status-dot" [class]="getAirQualityClass(s.estado_calidad_aire)"></span>
@@ -146,7 +144,7 @@ interface MetricDisplayConfig {
             </div>
             <div class="activity-list">
               <div *ngFor="let m of recentActivity()" class="activity-item">
-                <div class="activity-time">{{ formatTime(m.fecha_hora) }}</div>
+                <div class="activity-time">Lectura {{ getReadingNumber(m) }}</div>
                 <div class="activity-desc">
                   <strong>{{ getStationName(m.estacion_id) }}</strong>: 
                   {{ m.co2 ?? '---' }} ppm | {{ m.temperatura ?? '---' }}°C
@@ -594,23 +592,28 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
       stationsInData.forEach(sId => {
         const stationMeds = all.filter(m => m.estacion_id === sId);
         if (stationMeds.length > 0) {
-          latests.push(stationMeds[0]); // El PRIMERO es el más reciente
+          latests.push(stationMeds[stationMeds.length - 1]); // El ÚLTIMO es el más antiguo (Lectura 1)
         }
       });
       // El resumen ya está ordenado por el servicio (descendente general),
       // pero aquí nos aseguramos de que las estaciones se vean por su último reporte.
       this.latestByStation.set(latests);
 
-      // 2. Actividad Reciente (Primeros 10 de la lista, que son los más nuevos)
-      this.recentActivity.set(all.slice(0, 10));
+      // 2. Actividad Reciente (Primeros 10 de la lista, ordenados ascendente para coincidir con historial)
+      const sortedAsc = [...all].sort((a, b) => {
+        const dateA = new Date(a.fecha_hora).getTime();
+        const dateB = new Date(b.fecha_hora).getTime();
+        return dateA - dateB;
+      });
+      this.recentActivity.set(sortedAsc.slice(0, 10));
 
       // 3. Filtrar para la estación seleccionada (Gráficos y Métricas)
       const filtered = all.filter(m => m.estacion_id === stationId);
       
       if (filtered.length > 0) {
-        this.latestMedicion.set(filtered[0]); // El PRIMERO es el más reciente
-        // El histórico para el gráfico DEBE ser Ascendente (Pasado a Presente)
-        this.historicalMediciones.set([...filtered].reverse());
+        this.latestMedicion.set(filtered[filtered.length - 1]); // El ÚLTIMO en la lista descendente es el más antiguo (Lectura 1)
+        // El histórico para el gráfico: más nuevas a la izquierda, más antiguas (Lectura 1) a la derecha
+        this.historicalMediciones.set(filtered);
       } else {
         this.latestMedicion.set(null);
         this.historicalMediciones.set([]);
@@ -688,7 +691,17 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
   updateCharts(data: Medicion[]) {
     if (!this.gasesCanvas || !this.envCanvas || !this.Chart || !isPlatformBrowser(this.platformId)) return;
 
-    const labels = data.map(m => this.formatTime(m.fecha_hora));
+    const all = this.firestoreService.medicionesGeneral();
+    const sortedAsc = [...all].sort((a, b) => {
+      const dateA = new Date(a.fecha_hora).getTime();
+      const dateB = new Date(b.fecha_hora).getTime();
+      return dateA - dateB;
+    });
+
+    const labels = data.map(m => {
+      const idx = sortedAsc.findIndex(item => item.id === m.id);
+      return `Lectura ${idx !== -1 ? (idx + 1) : 1}`;
+    });
     const ctxGases = this.gasesCanvas.nativeElement.getContext('2d');
     const ctxEnv = this.envCanvas.nativeElement.getContext('2d');
 
@@ -782,6 +795,17 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!timestamp) return '--:--';
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  getReadingNumber(m: Medicion): number {
+    const all = this.firestoreService.medicionesGeneral();
+    const sortedAsc = [...all].sort((a, b) => {
+      const dateA = new Date(a.fecha_hora).getTime();
+      const dateB = new Date(b.fecha_hora).getTime();
+      return dateA - dateB;
+    });
+    const index = sortedAsc.findIndex(item => item.id === m.id);
+    return index !== -1 ? (index + 1) : 1;
   }
 
   /** Finaliza la sesión del usuario */

@@ -42,7 +42,7 @@ import { ExportService } from '../../services/export.service';
         <table class="data-table">
           <thead>
             <tr>
-              <th>Fecha y Hora</th>
+              <th>Lectura</th>
               <th>Estación</th>
               <!-- Columnas Dinámicas -->
               <th *ngFor="let header of dynamicHeaders()">{{ formatHeader(header) }}</th>
@@ -50,8 +50,8 @@ import { ExportService } from '../../services/export.service';
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let item of filteredMediciones()">
-              <td class="text-nowrap">{{ formatDate(item.fecha_hora) }}</td>
+            <tr *ngFor="let item of filteredMediciones(); let i = index">
+              <td class="text-nowrap">Lectura {{ i + 1 }}</td>
               <td><strong>{{ item.estacion_id }}</strong></td>
               
               <!-- Celdas Dinámicas -->
@@ -217,12 +217,20 @@ export class HistoryReportComponent implements OnInit {
     const search = this.searchText().toLowerCase().trim();
     const meds = this.mediciones();
     
-    if (!search) return meds;
-    
-    return meds.filter(m => 
-      m.estacion_id?.toLowerCase().includes(search) || 
-      m.estado_calidad_aire?.toLowerCase().includes(search)
-    );
+    let result = meds;
+    if (search) {
+      result = meds.filter(m => 
+        m.estacion_id?.toLowerCase().includes(search) || 
+        m.estado_calidad_aire?.toLowerCase().includes(search)
+      );
+    }
+
+    // Ordenamos explícitamente para que las lecturas más antiguas vayan en las primeras filas (cronológico ascendente)
+    return [...result].sort((a, b) => {
+      const dateA = new Date(a.fecha_hora).getTime();
+      const dateB = new Date(b.fecha_hora).getTime();
+      return dateA - dateB;
+    });
   });
 
   /** Identifica dinámicamente qué columnas existen en los datos para mostrarlas todas */
@@ -239,7 +247,11 @@ export class HistoryReportComponent implements OnInit {
     }));
     
     // Campos que NUNCA queremos como columnas dinámicas porque ya tienen columna fija
-    const excluded = ['id', 'estacion_id', 'fecha_hora', 'estado_calidad_aire', 'lat', 'lng', 'fecha', 'timestamp'];
+    const excluded = [
+      'id', 'estacion_id', 'fecha_hora', 'estado_calidad_aire',
+      'lat', 'lng', 'latitud', 'longitud', 'latitude', 'longitude',
+      'fecha', 'timestamp'
+    ];
     
     // Mapeo de normalización para detectar duplicados (coherencia)
     const normalizedToOriginal: Record<string, string[]> = {

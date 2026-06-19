@@ -326,11 +326,9 @@ export class HeatmapComponent implements OnInit, OnDestroy, AfterViewInit {
     const current = [...this.estacionesConDatos()];
     const lastMedsMap = new Map<string, Medicion>();
 
-    // Obtener la última medición de cada estación
+    // Obtener la medición más antigua (medida 1) de cada estación
     mediciones.forEach(m => {
-      if (!lastMedsMap.has(m.estacion_id)) {
-        lastMedsMap.set(m.estacion_id, m);
-      }
+      lastMedsMap.set(m.estacion_id, m); // Sobrescribimos para quedarnos con el más antiguo (el último en el orden descendente)
     });
 
     let huboCambios = false;

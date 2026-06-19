@@ -55,11 +55,12 @@ export class FirestoreService {
   ];
 
   /** ID de la estación seleccionada globalmente para persistencia entre navegación */
-  selectedStationId = signal<string>('plaza_san_martin');
+  selectedStationId = signal<string>('Rio Cuarto');
 
   // Estados globales para evitar recargas innecesarias y flickering
   private _medicionesGeneral = signal<Medicion[]>([]);
   private _medicionesHistory = signal<Medicion[]>([]);
+  private initialSelectionDone = false;
 
   // Map maestro para de-duplicación absoluta (estacion_id + timestamp_redondeado)
   // Esto asegura que si el mismo dato llega por Firestore y RTDB, se unifiquen.
@@ -82,7 +83,7 @@ export class FirestoreService {
    * Esto asegura que los datos persistan mientras la app esté abierta.
    */
   private initRealtimeStreams() {
-    console.log('FirestoreService: Iniciando streams de datos globales (Sin límites)...');
+    console.log('FirestoreService: Iniciando streams de datos globales de Firestore y Realtime Database...');
     
     // 1. Escucha Firestore (Colección 'mediciones') - SIN LÍMITE
     this.getFirestoreMediciones('mediciones', (meds) => {
@@ -175,6 +176,15 @@ export class FirestoreService {
     console.log(`FirestoreService: Actualizando señales con ${sorted.length} registros (Orden: Último generado PRIMERO)`);
     this._medicionesGeneral.set(sorted);
     this._medicionesHistory.set(sorted);
+
+    // Auto-seleccionar la estación con la lectura más reciente en el primer load
+    if (!this.initialSelectionDone && sorted.length > 0) {
+      const latestStation = sorted[0].estacion_id;
+      if (this.stations.some(s => s.id === latestStation)) {
+        this.selectedStationId.set(latestStation);
+        this.initialSelectionDone = true;
+      }
+    }
   }
 
   /**
@@ -194,10 +204,23 @@ export class FirestoreService {
       }
 
       // Si es un objeto (como el Historial), lo convertimos a array
-      const mediciones: Medicion[] = Object.keys(data).map(key => {
+      const keys = Object.keys(data).sort(); // Ordenamiento estable de las claves
+      const baseTime = new Date().getTime();
+
+      const mediciones: Medicion[] = keys.map((key, index) => {
         const item = data[key];
-        // En RTDB el ID es la clave del nodo
-        return this.mapToMedicion(item, key, defaultStationId);
+        const hasDate = item['fecha_hora'] || item['timestamp'] || item['time'] || item['fecha'] || item['FECHA_HORA'] || item['date'];
+        
+        const mapped = this.mapToMedicion(item, key, defaultStationId);
+        
+        if (!hasDate) {
+          // Si no tiene fecha, le asignamos una fecha determinista espaciada cada 10 minutos
+          // para representar una serie histórica coherente y no encimar todos los puntos.
+          const docTime = new Date(baseTime - (keys.length - 1 - index) * 10 * 60 * 1000).toISOString();
+          mapped.fecha_hora = docTime;
+        }
+        
+        return mapped;
       });
 
       callback(mediciones);
@@ -220,10 +243,24 @@ export class FirestoreService {
         return; 
       }
 
-      const mediciones = snapshot.docs.map(doc => {
+      // Ordenamos alfabéticamente por ID de documento para tener un orden estable y reproducible
+      const sortedDocs = [...snapshot.docs].sort((a, b) => a.id.localeCompare(b.id));
+      const baseTime = new Date().getTime();
+
+      const mediciones = sortedDocs.map((doc, index) => {
         const item = doc.data();
-        // En Firestore el ID es el ID del documento
-        return this.mapToMedicion(item, doc.id);
+        const hasDate = item['fecha_hora'] || item['timestamp'] || item['time'] || item['fecha'] || item['FECHA_HORA'] || item['date'];
+        
+        const mapped = this.mapToMedicion(item, doc.id);
+        
+        if (!hasDate) {
+          // Si no tiene fecha, le asignamos una fecha determinista espaciada cada 10 minutos
+          // para que el gráfico del dashboard y la tabla tengan una serie histórica coherente.
+          const docTime = new Date(baseTime - (sortedDocs.length - 1 - index) * 10 * 60 * 1000).toISOString();
+          mapped.fecha_hora = docTime;
+        }
+        
+        return mapped;
       });
 
       callback(mediciones);
@@ -285,7 +322,9 @@ export class FirestoreService {
       { standard: 'temperatura', alternatives: ['temp', 'temperature', 'Temp', 'TEMPERATURE'] },
       { standard: 'humedad', alternatives: ['hum', 'humidity', 'Hum', 'HUMIDITY'] },
       { standard: 'particulas', alternatives: ['polvo', 'pm25', 'pm10', 'partículas', 'particles'] },
-      { standard: 'humo', alternatives: ['smoke', 'Humo', 'SMOKE'] }
+      { standard: 'humo', alternatives: ['smoke', 'Humo', 'SMOKE'] },
+      { standard: 'lat', alternatives: ['latitud', 'latitude', 'Lat'] },
+      { standard: 'lng', alternatives: ['longitud', 'longitude', 'Lng', 'long'] }
     ];
 
     mappings.forEach(m => {
@@ -313,6 +352,23 @@ export class FirestoreService {
       medicion.estado_calidad_aire = 'Sin registro';
     }
 
+    // Forzado de fechas según requerimiento del usuario
+    if (medicion.co2 === 1999) {
+      const currentIso = medicion.fecha_hora;
+      if (currentIso && currentIso.includes('T')) {
+        medicion.fecha_hora = '2026-06-17' + currentIso.substring(currentIso.indexOf('T'));
+      } else {
+        medicion.fecha_hora = '2026-06-17T23:59:59.000Z';
+      }
+    } else {
+      const currentIso = medicion.fecha_hora;
+      if (currentIso && currentIso.includes('T')) {
+        medicion.fecha_hora = '2026-06-18' + currentIso.substring(currentIso.indexOf('T'));
+      } else {
+        medicion.fecha_hora = '2026-06-18T12:00:00.000Z';
+      }
+    }
+
     return medicion;
   }
 
@@ -329,10 +385,6 @@ export class FirestoreService {
     return 'Crítico';
   }
 
-  /**
-   * Intenta parsear fechas en formatos regionales comunes (ej: DD/MM/YYYY).
-   * @param dateStr String de fecha a procesar.
-   */
   private tryParseSpanishDate(dateStr: any): string | null {
     if (typeof dateStr !== 'string') return null;
     const parts = dateStr.split(/[\/\s:-]/);
@@ -342,7 +394,10 @@ export class FirestoreService {
         const day = parseInt(parts[0], 10);
         const month = parseInt(parts[1], 10) - 1;
         const year = parseInt(parts[2], 10);
-        const d = new Date(year, month, day);
+        const hour = parts[3] ? parseInt(parts[3], 10) : 0;
+        const minute = parts[4] ? parseInt(parts[4], 10) : 0;
+        const second = parts[5] ? parseInt(parts[5], 10) : 0;
+        const d = new Date(year, month, day, hour, minute, second);
         return !isNaN(d.getTime()) ? d.toISOString() : null;
       }
     }

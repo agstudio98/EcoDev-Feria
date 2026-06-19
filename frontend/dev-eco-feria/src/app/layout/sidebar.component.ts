@@ -82,48 +82,47 @@ export class SidebarComponent {
   downloadFullReport() {
     this.onItemClick();
     
-    // Obtener datos actuales para el reporte
-    this.firestoreService.getRTDBMedicionesHistory(40, (mediciones) => {
-      const stations = this.firestoreService.stations;
+    // Obtener datos actuales para el reporte desde las señales del servicio global
+    const mediciones = this.firestoreService.medicionesGeneral();
+    const stations = this.firestoreService.stations;
 
-      let htmlContent = `
-        <h1 style="color: #0d9488; text-align: center;">REPORTE DE CALIDAD DEL AIRE - DEVECO FERIA</h1>
-        <p style="text-align: center;"><i>Fecha de generación: ${new Date().toLocaleString()}</i></p>
-        <hr>
-        <h2>1. Resumen Ejecutivo</h2>
-        <p>El presente documento detalla el estado actual de la red de microestaciones de monitoreo ambiental desplegadas en puntos estratégicos. Los sensores analizan parámetros críticos para la salud pública y el medio ambiente.</p>
-        
-        <h2>2. Estado por Estación</h2>
-      `;
+    let htmlContent = `
+      <h1 style="color: #0d9488; text-align: center;">REPORTE DE CALIDAD DEL AIRE - DEVECO FERIA</h1>
+      <p style="text-align: center;"><i>Fecha de generación: ${new Date().toLocaleString()}</i></p>
+      <hr>
+      <h2>1. Resumen Ejecutivo</h2>
+      <p>El presente documento detalla el estado actual de la red de microestaciones de monitoreo ambiental desplegadas en puntos estratégicos. Los sensores analizan parámetros críticos para la salud pública y el medio ambiente.</p>
+      
+      <h2>2. Estado por Estación</h2>
+    `;
 
-      stations.forEach(s => {
-        const latest = mediciones.find(m => m.estacion_id === s.id);
-        htmlContent += `
-          <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #ccc;">
-            <h3 style="color: #2563eb;">${s.nombre}</h3>
-            ${latest ? `
-              <ul>
-                <li><b>Estado General:</b> ${latest.estado_calidad_aire}</li>
-                <li><b>Dióxido de Carbono:</b> ${latest.co2} ppm</li>
-                <li><b>Partículas PM2.5:</b> ${latest.particulas} mg/m³</li>
-                <li><b>Humedad:</b> ${latest.humedad}%</li>
-                <li><b>Temperatura:</b> ${latest.temperatura}°C</li>
-                <li><b>Presencia de Humo:</b> ${latest.humo} u</li>
-              </ul>
-            ` : '<p><i>No se registran datos recientes para esta estación.</i></p>'}
-          </div>
-        `;
-      });
-
+    stations.forEach(s => {
+      const latest = mediciones.find(m => m.estacion_id === s.id);
       htmlContent += `
-        <h2>3. Conclusiones y Recomendaciones</h2>
-        <p>Basado en los niveles de CO2 y Partículas PM2.5 detectados, se recomienda ${this.getRecommendation(mediciones)}.</p>
-        <br>
-        <p style="font-size: 0.8rem; color: #666;">Sistema DevEco Feria - Monitoreo en Tiempo Real</p>
+        <div style="margin-bottom: 20px; padding: 15px; border: 1px solid #ccc;">
+          <h3 style="color: #2563eb;">${s.nombre}</h3>
+          ${latest ? `
+            <ul>
+              <li><b>Estado General:</b> ${latest.estado_calidad_aire}</li>
+              <li><b>Dióxido de Carbono:</b> ${latest.co2} ppm</li>
+              <li><b>Partículas PM2.5:</b> ${latest.particulas ?? '---'} mg/m³</li>
+              <li><b>Humedad:</b> ${latest.humedad}%</li>
+              <li><b>Temperatura:</b> ${latest.temperatura}°C</li>
+              <li><b>Presencia de Humo:</b> ${latest.humo ?? '---'} u</li>
+            </ul>
+          ` : '<p><i>No se registran datos recientes para esta estación.</i></p>'}
+        </div>
       `;
-
-      this.exportService.exportToWord(htmlContent, 'Reporte_Ambiental_Completo');
     });
+
+    htmlContent += `
+      <h2>3. Conclusiones y Recomendaciones</h2>
+      <p>Basado en los niveles de CO2 y Partículas PM2.5 detectados, se recomienda ${this.getRecommendation(mediciones)}.</p>
+      <br>
+      <p style="font-size: 0.8rem; color: #666;">Sistema DevEco Feria - Monitoreo en Tiempo Real</p>
+    `;
+
+    this.exportService.exportToWord(htmlContent, 'Reporte_Ambiental_Completo');
   }
 
   private getRecommendation(mediciones: Medicion[]): string {
