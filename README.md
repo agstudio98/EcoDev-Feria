@@ -43,9 +43,11 @@ Se ha diseñado un módulo autónomo en `/frontend` para la integración rápida
 ### 2. Sincronización Angular y Lógica de Negocio (`FirestoreService`)
 * **Mapeo Robusto de Geolocalización**: Soporta campos alternativos del sensor (`latitud`/`longitud` de Río Cuarto y `lat`/`lng` estándar).
 * **Parsea-Fechas en Español**: Implementa un parseador que preserva horas, minutos y segundos de cadenas regionales (`DD/MM/YYYY HH:MM:SS`), asegurando ordenamientos estables al segundo.
+* **Normalización de Estaciones**: Normaliza IDs de estaciones heterogéneas (ej. variantes de `terminal` u `ómnibus` a `Terminal de Omnibus`, y `cordoba`/`microestacion` a `Cordoba Central`).
+* **Estimación de Datos (Failover de Sensores)**: Algoritmos dinámicos para estimar CO2 para `Cordoba Central` basado en otros sensores, y humo/partículas para las demás estaciones.
 * **Coexistencia RTDB y Firestore**: Escucha tanto el canal real de Firestore como las rutas de testing de RTDB.
-* **Ordenamiento del Historial**: La tabla de historial se ordena de forma cronológica ascendente (las lecturas más antiguas van en las primeras filas, denominándose correlativamente *Lectura 1*, *Lectura 2*, etc.).
-* **Focalización en Lectura 1**: El panel de resumen de métricas principales, la actividad reciente y el mapa de calor de Córdoba se configuraron para visualizar la **Lectura 1** (la medición inicial) de cada estación.
+* **Ordenamiento y Filtros en Historial**: Ordenación cronológica ascendente en la tabla, con buscador textual mejorado y nuevos selectores desplegables para filtrar por estación y estado de calidad del aire.
+* **Focalización en Lectura 1**: El panel de resumen de métricas principales, la actividad reciente y el mapa de calor de Córdoba se configuraron para visualizar la **Lectura 1** (la medición inicial de cada estación).
 
 ---
 

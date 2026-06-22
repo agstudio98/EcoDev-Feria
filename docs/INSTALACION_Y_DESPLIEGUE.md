@@ -33,11 +33,14 @@ ng serve
 La aplicación estará disponible en `http://localhost:4200/`.
 
 ## Construcción para Producción
-Para generar los archivos listos para desplegar:
+Para generar los archivos optimizados listos para desplegar:
 ```bash
 ng build
 ```
 Los archivos se generarán en la carpeta `dist/dev-eco-feria/`.
+
+> [!NOTE]
+> La compilación de producción incluye optimizaciones específicas configuradas en `angular.json`, tales como compresión y minificación de scripts, estilos, y desactivación de la inserción directa de fuentes (`fonts.inline: false`) para asegurar tiempos de carga rápidos y compatibilidad óptima en el hosting.
 
 ## Despliegue en Firebase Hosting
 1. Inicie sesión en Firebase CLI: `firebase login`.

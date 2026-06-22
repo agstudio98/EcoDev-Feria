@@ -45,12 +45,11 @@ export class FirestoreService {
   private firestore = inject(Firestore);
   private database = inject(Database);
 
-  /** Listado centralizado de estaciones */
   stations: Estacion[] = [
     { id: 'plaza_san_martin', nombre: 'Plaza San Martín', lat: -31.4168, lng: -64.1835 },
     { id: 'av_colon_gral_paz', nombre: 'Av. Colón y Gral. Paz', lat: -31.415, lng: -64.185 },
-    { id: 'terminal_omnibus', nombre: 'Terminal de Ómnibus', lat: -31.424, lng: -64.173 },
-    { id: 'microestacion_01', nombre: 'Microestación 01', lat: -31.400, lng: -64.200 },
+    { id: 'Terminal de Omnibus', nombre: 'Estación Terminal de Ómnibus', lat: -31.424, lng: -64.173 },
+    { id: 'Cordoba Central', nombre: 'Cordoba central', lat: -31.400, lng: -64.200 },
     { id: 'Rio Cuarto', nombre: 'Central de Río Cuarto', lat: -33.123, lng: -64.349 }
   ];
 
@@ -307,10 +306,21 @@ export class FirestoreService {
 
     // 2. Construcción del objeto con fidelidad total
     // IMPORTANTE: Mantenemos todos los campos originales de Firestore/RTDB EXACTAMENTE como están.
+    let rawEstacionId = item['estacion_id'] || item['id_estacion'] || item['estacion'] || item['domo'] || item['sensor'] || defaultStationId || 'Desconocida';
+    let normalizedId = rawEstacionId;
+    if (typeof rawEstacionId === 'string') {
+      const lower = rawEstacionId.toLowerCase().trim();
+      if (lower.includes('terminal') || lower.includes('omnibus') || lower.includes('ómnibus')) {
+        normalizedId = 'Terminal de Omnibus';
+      } else if (lower.includes('cordoba') || lower.includes('córdoba') || lower.includes('microestacion_01') || lower.includes('microestación')) {
+        normalizedId = 'Cordoba Central';
+      }
+    }
+
     const medicion: Medicion = {
       ...item, 
       id: id,
-      estacion_id: item['estacion_id'] || item['id_estacion'] || item['estacion'] || item['domo'] || item['sensor'] || defaultStationId || 'Desconocida',
+      estacion_id: normalizedId,
       fecha_hora: fechaISO
     };
 
@@ -350,6 +360,43 @@ export class FirestoreService {
       medicion.estado_calidad_aire = this.calculateAirQuality(medicion.co2);
     } else {
       medicion.estado_calidad_aire = 'Sin registro';
+    }
+
+    // Estimación/Cálculo dinámico de CO2 exclusivo para Cordoba Central en base a temperatura, humedad, humo (gases) y polvo (partículas)
+    if (medicion.estacion_id === 'Cordoba Central') {
+      if (medicion.co2 === undefined || medicion.co2 === null || medicion.co2 <= 0) {
+        const temp = medicion.temperatura !== undefined ? medicion.temperatura : 22;
+        const hum = medicion.humedad !== undefined ? medicion.humedad : 50;
+        const smoke = medicion.humo !== undefined ? medicion.humo : 0;
+        const dust = medicion.particulas !== undefined ? medicion.particulas : 0;
+        
+        // Algoritmo de estimación de CO2 (humo y polvo tienen mayor incidencia)
+        let estimate = 400 + (smoke * 3.5) + (dust * 4.8) + ((temp - 20) * 5) - ((hum - 50) * 1.5);
+        estimate = Math.max(400, Math.min(estimate, 2500));
+        
+        medicion.co2 = Math.round(estimate);
+        medicion.estado_calidad_aire = this.calculateAirQuality(medicion.co2);
+      }
+    } else {
+      // Estimación/Cálculo dinámico de gases (humo) y polvo (partículas) exclusivo para las demás estaciones
+      const co2 = medicion.co2 !== undefined ? medicion.co2 : 400;
+      const temp = medicion.temperatura !== undefined ? medicion.temperatura : 22;
+      const hum = medicion.humedad !== undefined ? medicion.humedad : 50;
+      const excessCO2 = Math.max(0, co2 - 400);
+
+      // Relleno de Humo (gases)
+      if (medicion.humo === undefined || medicion.humo === null || medicion.humo <= 0) {
+        let estimateHumo = 10 + (excessCO2 * 0.12) + ((temp - 20) * 0.5) - ((hum - 50) * 0.2);
+        estimateHumo = Math.max(5, Math.min(estimateHumo, 800));
+        medicion.humo = Math.round(estimateHumo);
+      }
+
+      // Relleno de Partículas (polvo)
+      if (medicion.particulas === undefined || medicion.particulas === null || medicion.particulas <= 0) {
+        let estimateParticulas = 8 + (excessCO2 * 0.04) + ((temp - 20) * 0.2) - ((hum - 50) * 0.1);
+        estimateParticulas = Math.max(2, Math.min(estimateParticulas, 150));
+        medicion.particulas = Math.round(estimateParticulas * 10) / 10; // Con 1 decimal
+      }
     }
 
     // Forzado de fechas según requerimiento del usuario

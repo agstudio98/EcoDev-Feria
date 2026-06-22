@@ -584,8 +584,8 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
       
       console.log(`GeneralPanel: Procesando ${all.length} registros (Orden: Último Primero)`);
       
-      // 1. Obtener la última medición de CADA estación (Resumen Global)
-      // Como el orden es DESCENDENTE, el primer elemento de cada grupo es el más reciente.
+      // 1. Obtener la primera medición (Lectura 1) de CADA estación (Resumen Global)
+      // Como el orden es DESCENDENTE, el último elemento es el más antiguo (Lectura 1).
       const latests: Medicion[] = [];
       const stationsInData = [...new Set(all.map(m => m.estacion_id))];
       
@@ -596,10 +596,10 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       });
       // El resumen ya está ordenado por el servicio (descendente general),
-      // pero aquí nos aseguramos de que las estaciones se vean por su último reporte.
+      // pero aquí nos aseguramos de que las estaciones se vean por su primer reporte (Lectura 1).
       this.latestByStation.set(latests);
 
-      // 2. Actividad Reciente (Primeros 10 de la lista, ordenados ascendente para coincidir con historial)
+      // 2. Actividad Reciente (Primeras 10 lecturas del historial, ordenadas cronológicamente de forma ascendente)
       const sortedAsc = [...all].sort((a, b) => {
         const dateA = new Date(a.fecha_hora).getTime();
         const dateB = new Date(b.fecha_hora).getTime();
@@ -612,8 +612,8 @@ export class GeneralPanelComponent implements OnInit, AfterViewInit, OnDestroy {
       
       if (filtered.length > 0) {
         this.latestMedicion.set(filtered[filtered.length - 1]); // El ÚLTIMO en la lista descendente es el más antiguo (Lectura 1)
-        // El histórico para el gráfico: más nuevas a la izquierda, más antiguas (Lectura 1) a la derecha
-        this.historicalMediciones.set(filtered);
+        // El histórico para el gráfico: ordenado cronológicamente ascendente (del más antiguo al más nuevo, izquierda a derecha)
+        this.historicalMediciones.set([...filtered].reverse());
       } else {
         this.latestMedicion.set(null);
         this.historicalMediciones.set([]);

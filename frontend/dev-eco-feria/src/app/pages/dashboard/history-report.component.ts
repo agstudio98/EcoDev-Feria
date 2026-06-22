@@ -26,8 +26,25 @@ import { ExportService } from '../../services/export.service';
             <input type="text" 
                    [ngModel]="searchText()" 
                    (ngModelChange)="searchText.set($event)" 
-                   placeholder="Buscar por ID de estación o estado...">
+                   placeholder="Buscar por estación o estado...">
           </div>
+
+          <!-- Selector de Estaciones -->
+          <select [ngModel]="selectedStation()" 
+                  (ngModelChange)="selectedStation.set($event)" 
+                  class="filter-select">
+            <option value="all">Todas las estaciones</option>
+            <option *ngFor="let s of availableStations()" [value]="s.id">{{ s.nombre }}</option>
+          </select>
+
+          <!-- Selector de Estados -->
+          <select [ngModel]="selectedState()" 
+                  (ngModelChange)="selectedState.set($event)" 
+                  class="filter-select">
+            <option value="all">Todos los estados</option>
+            <option *ngFor="let state of availableStates()" [value]="state">{{ state }}</option>
+          </select>
+
           <div class="stats-badge">
             <strong>{{ filteredMediciones().length }}</strong> registros encontrados
           </div>
@@ -52,7 +69,7 @@ import { ExportService } from '../../services/export.service';
           <tbody>
             <tr *ngFor="let item of filteredMediciones(); let i = index">
               <td class="text-nowrap">Lectura {{ i + 1 }}</td>
-              <td><strong>{{ item.estacion_id }}</strong></td>
+              <td><strong>{{ getStationName(item.estacion_id) }}</strong></td>
               
               <!-- Celdas Dinámicas -->
               <td *ngFor="let col of dynamicHeaders()">
@@ -100,6 +117,28 @@ import { ExportService } from '../../services/export.service';
       .search-box {
         position: relative;
         flex: 1;
+        min-width: 200px;
+      }
+      .filter-select {
+        background: var(--color-input-bg, #0b192f);
+        border: 1px solid var(--color-border, rgba(100, 255, 218, 0.08));
+        color: var(--color-text, #cbd5e1);
+        padding: 0.75rem 2.25rem 0.75rem 1rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        outline: none;
+        cursor: pointer;
+        transition: var(--transition-smooth);
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364ffda' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        background-size: 16px;
+        min-width: 180px;
+      }
+      .filter-select:focus {
+        border-color: var(--color-accent, #64ffda);
+        box-shadow: 0 0 10px rgba(100, 255, 218, 0.1);
       }
       .stats-badge {
         font-size: 0.8rem;
@@ -212,17 +251,69 @@ export class HistoryReportComponent implements OnInit {
   /** Signal para el texto de búsqueda */
   searchText = signal('');
 
-  /** Mediciones filtradas según el texto de búsqueda */
+  /** Filtros seleccionados */
+  stations = this.firestoreService.stations;
+  selectedStation = signal<string>('all');
+  selectedState = signal<string>('all');
+
+  /** Estaciones disponibles calculadas dinámicamente */
+  availableStations = computed(() => {
+    const meds = this.mediciones();
+    const stationIds = new Set<string>();
+    meds.forEach(m => {
+      if (m.estacion_id) {
+        stationIds.add(m.estacion_id);
+      }
+    });
+    
+    return Array.from(stationIds).map(id => {
+      const match = this.stations.find(s => s.id === id);
+      return {
+        id,
+        nombre: match ? match.nombre : id
+      };
+    }).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  });
+
+  /** Estados disponibles calculados dinámicamente */
+  availableStates = computed(() => {
+    const meds = this.mediciones();
+    const states = new Set<string>();
+    meds.forEach(m => {
+      if (m.estado_calidad_aire) {
+        states.add(m.estado_calidad_aire);
+      }
+    });
+    return Array.from(states).sort();
+  });
+
+  /** Mediciones filtradas según búsqueda y selectores */
   filteredMediciones = computed(() => {
     const search = this.searchText().toLowerCase().trim();
+    const stationFilter = this.selectedStation();
+    const stateFilter = this.selectedState();
     const meds = this.mediciones();
     
     let result = meds;
+    
+    // Filtrar por búsqueda de texto
     if (search) {
-      result = meds.filter(m => 
-        m.estacion_id?.toLowerCase().includes(search) || 
-        m.estado_calidad_aire?.toLowerCase().includes(search)
-      );
+      result = result.filter(m => {
+        const stationName = this.getStationName(m.estacion_id).toLowerCase();
+        return m.estacion_id?.toLowerCase().includes(search) || 
+               stationName.includes(search) ||
+               m.estado_calidad_aire?.toLowerCase().includes(search);
+      });
+    }
+
+    // Filtrar por selector de estación
+    if (stationFilter !== 'all') {
+      result = result.filter(m => m.estacion_id === stationFilter);
+    }
+
+    // Filtrar por selector de estado
+    if (stateFilter !== 'all') {
+      result = result.filter(m => m.estado_calidad_aire === stateFilter);
     }
 
     // Ordenamos explícitamente para que las lecturas más antiguas vayan en las primeras filas (cronológico ascendente)
@@ -232,6 +323,10 @@ export class HistoryReportComponent implements OnInit {
       return dateA - dateB;
     });
   });
+
+  getStationName(id: string): string {
+    return this.stations.find(s => s.id === id)?.nombre || id;
+  }
 
   /** Identifica dinámicamente qué columnas existen en los datos para mostrarlas todas */
   dynamicHeaders = computed(() => {
